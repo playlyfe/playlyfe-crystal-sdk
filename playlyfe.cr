@@ -24,7 +24,10 @@ class Playlyfe
     @code = ""
     @token = {} of String => JSON::Type
     unless store
-      @store = ->(token : Hash(String, JSON::Type)) { puts "Storing Token" }
+      @store = ->(token : Hash(String, JSON::Type)) {
+        puts "Storing Token"
+        @token = token
+      }
     end
     if store
       @store = store
@@ -62,6 +65,9 @@ class Playlyfe
     end
     response = @token_client.post("/auth/token", headers, body.to_json)
     token = JSON.parse(response.body) as Hash
+    if token["error"]?
+      raise PlaylyfeException.new(token)
+    end
     expires_at = Time.now.to_i + token["expires_in"] as Int64
     token.delete("expires_in")
     token["expires_at"] = expires_at
@@ -87,7 +93,7 @@ class Playlyfe
     end
   end
 
-  def api(method, route, query = ReqQuery.new, body = Object.new, raw = false)
+  def api(method, route, query = ReqQuery.new, body = ReqQuery.new, raw = false)
     check_token(query)
     headers = HTTP::Headers{"Content-Type": "application/json", "Accept": "application/json"}
     route = "/#{@version}#{route}?#{query.map{|k,v| "#{k}=#{v}"}.join("&")}"
@@ -96,7 +102,7 @@ class Playlyfe
     end
     case method
     when "POST"
-      res = @api_client.get(route, headers, body.to_json)
+      res = @api_client.post(route, headers, body.to_json)
     when "PATCH"
       res = @api_client.patch(route, headers, body.to_json)
     when "PUT"
@@ -126,15 +132,15 @@ class Playlyfe
     api("GET", route, query, nil, true)
   end
 
-  def post(route, query = ReqQuery.new, body = Object.new)
+  def post(route, query = ReqQuery.new, body = ReqQuery.new)
     api("POST", route, query, body, false)
   end
 
-  def put(route, query = ReqQuery.new, body = Object.new)
+  def put(route, query = ReqQuery.new, body = ReqQuery.new)
     api("PUT", route, query, body, false)
   end
 
-  def patch(route, query = ReqQuery.new, body = Object.new)
+  def patch(route, query = ReqQuery.new, body = ReqQuery.new)
     api("PATCH", route, query, body, false)
   end
 
